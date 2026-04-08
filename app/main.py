@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from app.database import init_db
 from app.routes import router as api_router
 from app.views import router as views_router
-from app.scheduler import start_scheduler, stop_scheduler
+from app.scheduler import start_scheduler, stop_scheduler, restore_schedules
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +16,8 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    start_scheduler(interval_hours=24)
+    start_scheduler()
+    await restore_schedules()
     yield
     stop_scheduler()
 

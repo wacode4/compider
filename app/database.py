@@ -46,12 +46,15 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_scans_site_id ON scans(site_id);
             CREATE INDEX IF NOT EXISTS idx_sites_user_id ON sites(user_id);
         """)
-        # Add user_id column if migrating from old schema
-        try:
-            await db.execute("ALTER TABLE sites ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0")
-            await db.commit()
-        except Exception:
-            pass  # Column already exists
+        # Migrations for older schemas
+        for col_sql in [
+            "ALTER TABLE sites ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE sites ADD COLUMN schedule TEXT DEFAULT NULL",
+        ]:
+            try:
+                await db.execute(col_sql)
+            except Exception:
+                pass
         await db.commit()
 
 

@@ -7,6 +7,11 @@
         <div class="form-row">
             <input type="url" id="siteUrl" placeholder="https://example.com" required>
             <input type="text" id="siteName" placeholder="Site name (optional)" style="max-width: 200px;">
+            <select id="siteSchedule" style="max-width: 160px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <option value="">No auto scan</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+            </select>
             <button type="submit" class="btn btn-primary">Add & Scan</button>
         </div>
     </form>
@@ -25,6 +30,7 @@
                     <th>Total Pages</th>
                     <th>Errors</th>
                     <th>Status</th>
+                    <th>Auto Scan</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -59,6 +65,13 @@
                         <span class="badge badge-gray">No scans</span>
                         {% endif %}
                     </td>
+                    <td onclick="event.stopPropagation();">
+                        <select class="schedule-select" data-site-id="{{ site.id }}" onchange="updateSchedule({{ site.id }}, this.value)" style="padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                            <option value="" {% if not site.schedule %}selected{% endif %}>Off</option>
+                            <option value="weekly" {% if site.schedule == 'weekly' %}selected{% endif %}>Weekly</option>
+                            <option value="monthly" {% if site.schedule == 'monthly' %}selected{% endif %}>Monthly</option>
+                        </select>
+                    </td>
                     <td>
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); triggerScan({{ site.id }})">Rescan</button>
                         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteSite({{ site.id }})">Delete</button>
@@ -80,10 +93,11 @@ document.getElementById('addSiteForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const url = document.getElementById('siteUrl').value;
     const name = document.getElementById('siteName').value;
+    const schedule = document.getElementById('siteSchedule').value || null;
     const resp = await fetch('/api/sites', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url, name: name || null})
+        body: JSON.stringify({url, name: name || null, schedule})
     });
     if (resp.ok) location.reload();
     else alert('Failed to add site');
@@ -98,6 +112,15 @@ async function deleteSite(siteId) {
     if (!confirm('Delete this site and all scan data?')) return;
     const resp = await fetch(`/api/sites/${siteId}`, {method: 'DELETE'});
     if (resp.ok) location.reload();
+}
+
+async function updateSchedule(siteId, schedule) {
+    const resp = await fetch(`/api/sites/${siteId}/schedule`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({schedule: schedule || null})
+    });
+    if (!resp.ok) alert('Failed to update schedule');
 }
 </script>
 {% endblock %}

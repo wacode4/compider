@@ -5,7 +5,7 @@ import aiohttp
 import asyncio
 from app.database import get_db
 from app.crawler import crawl_site
-from app.scheduler import scheduler, scheduled_crawl
+from app.scheduler import schedule_site_job, remove_site_job
 from app.auth import hash_password, verify_password, create_token, require_user
 import os
 
@@ -80,6 +80,7 @@ async def logout():
 class SiteCreate(BaseModel):
     url: str
     name: str | None = None
+    schedule: str | None = None  # "weekly" | "monthly" | None
 
 
 async def run_crawl(url: str, scan_id: int):
@@ -117,9 +118,10 @@ async def add_site(site: SiteCreate, request: Request, bg: BackgroundTasks):
         if row:
             site_id = row["id"]
         else:
+            schedule = site.schedule if site.schedule in ("weekly", "monthly") else None
             cursor = await db.execute(
-                "INSERT INTO sites (url, name, user_id) VALUES (?, ?, ?)",
-                (site.url.rstrip("/"), site.name or site.url, user["id"])
+                "INSERT INTO sites (url, name, user_id, schedule) VALUES (?, ?, ?, ?)",
+                (site.url.rstrip("/"), site.name or site.url, user["id"], schedule)
             )
             site_id = cursor.lastrowid
         await db.commit()
@@ -130,6 +132,13 @@ async def add_site(site: SiteCreate, request: Request, bg: BackgroundTasks):
         scan_id = cursor.lastrowid
         await db.commit()
         bg.add_task(run_crawl, site.url.rstrip("/"), scan_id)
+
+        # Register scheduled job if requested
+        sched_cursor = await db.execute("SELECT schedule FROM sites WHERE id = ?", (site_id,))
+        sched_row = await sched_cursor.fetchone()
+        if sched_row and sched_row["schedule"]:
+            schedule_site_job(site_id, site.url.rstrip("/"), sched_row["schedule"])
+
         return {"site_id": site_id, "scan_id": scan_id, "status": "crawling"}
     finally:
         await db.close()
@@ -289,12 +298,37 @@ async def diff_scans(site_id: int, request: Request, scan_a: int | None = None, 
         await db.close()
 
 
+class ScheduleUpdate(BaseModel):
+    schedule: str | None = None  # "weekly" | "monthly" | None
+
+
+@router.put("/sites/{site_id}/schedule")
+async def update_site_schedule(site_id: int, req: ScheduleUpdate, request: Request):
+    user = await require_user(request)
+    db = await get_db()
+    try:
+        await verify_site_owner(db, site_id, user["id"])
+        schedule = req.schedule if req.schedule in ("weekly", "monthly") else None
+        await db.execute("UPDATE sites SET schedule = ? WHERE id = ?", (schedule, site_id))
+        await db.commit()
+        if schedule:
+            cursor = await db.execute("SELECT url FROM sites WHERE id = ?", (site_id,))
+            site = await cursor.fetchone()
+            schedule_site_job(site_id, site["url"], schedule)
+        else:
+            remove_site_job(site_id)
+        return {"site_id": site_id, "schedule": schedule}
+    finally:
+        await db.close()
+
+
 @router.delete("/sites/{site_id}")
 async def delete_site(site_id: int, request: Request):
     user = await require_user(request)
     db = await get_db()
     try:
         await verify_site_owner(db, site_id, user["id"])
+        remove_site_job(site_id)
         await db.execute(
             "DELETE FROM pages WHERE scan_id IN (SELECT id FROM scans WHERE site_id = ?)",
             (site_id,)
@@ -307,28 +341,6 @@ async def delete_site(site_id: int, request: Request):
         await db.close()
 
 
-class ScheduleSettings(BaseModel):
-    interval_hours: int = 24
-
-
-@router.post("/settings/schedule")
-async def update_schedule(settings: ScheduleSettings, request: Request):
-    await require_user(request)
-    scheduler.remove_job("auto_crawl", jobstore="default")
-    scheduler.add_job(
-        scheduled_crawl, "interval", hours=settings.interval_hours,
-        id="auto_crawl", replace_existing=True
-    )
-    return {"interval_hours": settings.interval_hours, "status": "updated"}
-
-
-@router.get("/settings/schedule")
-async def get_schedule(request: Request):
-    await require_user(request)
-    job = scheduler.get_job("auto_crawl")
-    if job:
-        return {"interval_hours": job.trigger.interval.total_seconds() / 3600, "next_run": str(job.next_run_time)}
-    return {"interval_hours": None, "next_run": None}
 
 
 class UrlCheckRequest(BaseModel):
