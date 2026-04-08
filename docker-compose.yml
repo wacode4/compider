@@ -1,0 +1,12 @@
+services:
+  compider:
+    build: .
+    container_name: compider
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - COMPIDER_DB=/app/data/compider.db
+      - COMPIDER_SECRET=${COMPIDER_SECRET:-change-this-secret-in-production}
