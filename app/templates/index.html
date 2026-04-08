@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Compider - Dashboard{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add Site</h2>
+    <form id="addSiteForm">
+        <div class="form-row">
+            <input type="url" id="siteUrl" placeholder="https://example.com" required>
+            <input type="text" id="siteName" placeholder="Site name (optional)" style="max-width: 200px;">
+            <button type="submit" class="btn btn-primary">Add & Scan</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Tracked Sites</h2>
+    <div id="sitesList">
+        {% if sites %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Site</th>
+                    <th>URL</th>
+                    <th>Last Scan</th>
+                    <th>Total Pages</th>
+                    <th>Errors</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for site in sites %}
+                <tr style="cursor: pointer;" onclick="window.location='/site/{{ site.id }}{% if site.latest_scan and site.latest_scan.status == 'done' %}/scan/{{ site.latest_scan.id }}{% endif %}'">
+                    <td><a href="/site/{{ site.id }}">{{ site.name or site.url }}</a></td>
+                    <td class="url-cell">{{ site.url }}</td>
+                    <td>
+                        {% if site.latest_scan %}
+                            {{ site.latest_scan.finished_at or site.latest_scan.started_at }}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if site.latest_scan %}
+                            {{ site.latest_scan.total_urls }}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if site.latest_scan %}
+                            {% if site.error_count > 0 %}
+                            <a href="/site/{{ site.id }}/scan/{{ site.latest_scan.id }}?filter=errors" onclick="event.stopPropagation();" class="badge badge-red" style="text-decoration:none;">{{ site.error_count }}</a>
+                            {% else %}
+                            <span class="badge badge-green">0</span>
+                            {% endif %}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if site.latest_scan %}
+                        <span class="scan-status {{ site.latest_scan.status }}">{{ site.latest_scan.status }}</span>
+                        {% else %}
+                        <span class="badge badge-gray">No scans</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); triggerScan({{ site.id }})">Rescan</button>
+                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteSite({{ site.id }})">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No sites tracked yet. Add one above.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('addSiteForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = document.getElementById('siteUrl').value;
+    const name = document.getElementById('siteName').value;
+    const resp = await fetch('/api/sites', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url, name: name || null})
+    });
+    if (resp.ok) location.reload();
+    else alert('Failed to add site');
+});
+
+async function triggerScan(siteId) {
+    const resp = await fetch(`/api/sites/${siteId}/scan`, {method: 'POST'});
+    if (resp.ok) location.reload();
+}
+
+async function deleteSite(siteId) {
+    if (!confirm('Delete this site and all scan data?')) return;
+    const resp = await fetch(`/api/sites/${siteId}`, {method: 'DELETE'});
+    if (resp.ok) location.reload();
+}
+</script>
+{% endblock %}

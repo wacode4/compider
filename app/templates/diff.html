@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Diff - {{ site.name or site.url }} - Compider{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Scan Comparison: {{ site.name or site.url }}</h2>
+    <form id="diffForm" style="display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+        <label style="font-size: 14px; color: #555;">Before:</label>
+        <select id="scanA" name="scan_a" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            {% for s in all_scans %}
+            <option value="{{ s.id }}" {% if s.id == diff.scan_a %}selected{% endif %}>
+                #{{ s.id }} — {{ s.started_at }} ({{ s.total_urls }} pages)
+            </option>
+            {% endfor %}
+        </select>
+        <span style="font-size: 18px; color: #999;">→</span>
+        <label style="font-size: 14px; color: #555;">After:</label>
+        <select id="scanB" name="scan_b" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            {% for s in all_scans %}
+            <option value="{{ s.id }}" {% if s.id == diff.scan_b %}selected{% endif %}>
+                #{{ s.id }} — {{ s.started_at }} ({{ s.total_urls }} pages)
+            </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm">Compare</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="summary-grid">
+        <div class="summary-item" style="background: #e8f5e9;">
+            <div class="num" style="color: #2e7d32;">{{ diff.summary.added }}</div>
+            <div class="label">New URLs</div>
+        </div>
+        <div class="summary-item" style="background: #ffebee;">
+            <div class="num" style="color: #c62828;">{{ diff.summary.removed }}</div>
+            <div class="label">Removed URLs</div>
+        </div>
+        <div class="summary-item" style="background: #fff9c4;">
+            <div class="num" style="color: #f57f17;">{{ diff.summary.title_changed }}</div>
+            <div class="label">Title Changes</div>
+        </div>
+        <div class="summary-item" style="background: #e3f2fd;">
+            <div class="num" style="color: #1565c0;">{{ diff.summary.status_changed }}</div>
+            <div class="label">Status Changes</div>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="padding-bottom: 0;">
+    <div class="diff-tabs">
+        <button class="diff-tab active" data-tab="added" style="border-bottom-color: #2e7d32; color: #2e7d32;">
+            + New <span class="badge badge-green">{{ diff.summary.added }}</span>
+        </button>
+        <button class="diff-tab" data-tab="removed" style="color: #c62828;">
+            - Removed <span class="badge badge-red">{{ diff.summary.removed }}</span>
+        </button>
+        <button class="diff-tab" data-tab="title" style="color: #f57f17;">
+            Title Changes <span class="badge badge-yellow">{{ diff.summary.title_changed }}</span>
+        </button>
+        <button class="diff-tab" data-tab="status" style="color: #1565c0;">
+            Status Changes <span class="badge badge-blue">{{ diff.summary.status_changed }}</span>
+        </button>
+    </div>
+</div>
+
+<div class="card diff-panel" id="panel-added">
+    <div style="text-align: right; margin-bottom: 8px;">
+        <button class="btn btn-primary btn-sm" onclick="exportDiffCSV('panel-added', 'new_urls')">Export CSV</button>
+    </div>
+    {% if diff.added %}
+    <table>
+        <thead><tr><th>URL</th><th>Status</th><th>Title</th></tr></thead>
+        <tbody>
+            {% for p in diff.added %}
+            <tr>
+                <td class="url-cell"><a href="{{ p.url }}" target="_blank">{{ p.url }}</a></td>
+                <td><span class="status-code sc-200">{{ p.status_code }}</span></td>
+                <td>{{ p.title or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No new URLs.</div>
+    {% endif %}
+</div>
+
+<div class="card diff-panel" id="panel-removed" style="display: none;">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <div>
+            {% if diff.removed %}
+            <button class="btn btn-primary btn-sm" id="checkRemovedBtn" onclick="checkRemovedUrls()">Check Current Status</button>
+            {% endif %}
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="exportDiffCSV('panel-removed', 'removed_urls')">Export CSV</button>
+    </div>
+    {% if diff.removed %}
+    <table id="removedTable">
+        <thead><tr><th>URL</th><th>Last Status</th><th>Last Title</th><th>Current Status</th><th>Redirect To</th></tr></thead>
+        <tbody>
+            {% for p in diff.removed %}
+            <tr data-url="{{ p.url }}">
+                <td class="url-cell">{{ p.url }}</td>
+                <td><span class="status-code sc-{{ p.status_code }}">{{ p.status_code }}</span></td>
+                <td>{{ p.title or '-' }}</td>
+                <td class="check-status"><span class="badge badge-gray">-</span></td>
+                <td class="check-redirect">-</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No removed URLs.</div>
+    {% endif %}
+</div>
+
+<div class="card diff-panel" id="panel-title" style="display: none;">
+    <div style="text-align: right; margin-bottom: 8px;">
+        <button class="btn btn-primary btn-sm" onclick="exportDiffCSV('panel-title', 'title_changes')">Export CSV</button>
+    </div>
+    {% if diff.title_changed %}
+    <table>
+        <thead><tr><th>URL</th><th>Old Title</th><th>New Title</th></tr></thead>
+        <tbody>
+            {% for p in diff.title_changed %}
+            <tr>
+                <td class="url-cell"><a href="{{ p.url }}" target="_blank">{{ p.url }}</a></td>
+                <td>{{ p.old_title or '-' }}</td>
+                <td>{{ p.new_title or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No title changes.</div>
+    {% endif %}
+</div>
+
+<div class="card diff-panel" id="panel-status" style="display: none;">
+    <div style="text-align: right; margin-bottom: 8px;">
+        <button class="btn btn-primary btn-sm" onclick="exportDiffCSV('panel-status', 'status_changes')">Export CSV</button>
+    </div>
+    {% if diff.status_changed %}
+    <table>
+        <thead><tr><th>URL</th><th>Old Status</th><th>New Status</th></tr></thead>
+        <tbody>
+            {% for p in diff.status_changed %}
+            <tr>
+                <td class="url-cell"><a href="{{ p.url }}" target="_blank">{{ p.url }}</a></td>
+                <td><span class="status-code">{{ p.old_status }}</span></td>
+                <td><span class="status-code">{{ p.new_status }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No status changes.</div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('diffForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const a = document.getElementById('scanA').value;
+    const b = document.getElementById('scanB').value;
+    if (a === b) { alert('Please select two different scans'); return; }
+    window.location.href = `/site/{{ site.id }}/diff?scan_a=${a}&scan_b=${b}`;
+});
+
+function applyCheckResult(row, r) {
+    const statusCell = row.querySelector('.check-status');
+    const redirectCell = row.querySelector('.check-redirect');
+    const sc = r.status_code;
+
+    let cls = 'sc-0';
+    if (sc === 200) cls = 'sc-200';
+    else if (sc >= 300 && sc < 400) cls = 'sc-3xx';
+    else if (sc >= 400 && sc < 500) cls = 'sc-4xx';
+    else if (sc >= 500) cls = 'sc-5xx';
+
+    statusCell.innerHTML = `<span class="status-code ${cls}">${sc || 'ERR'}</span>`;
+    if (r.error) statusCell.innerHTML += ` <span style="color:#999;font-size:12px;">${r.error}</span>`;
+
+    if (r.redirect_to) {
+        redirectCell.innerHTML = `<a href="${r.redirect_to}" target="_blank" class="url-cell">${r.redirect_to}</a>`;
+    } else {
+        redirectCell.textContent = '-';
+    }
+}
+
+async function checkRemovedUrls() {
+    const btn = document.getElementById('checkRemovedBtn');
+    btn.disabled = true;
+
+    const rows = Array.from(document.querySelectorAll('#removedTable tbody tr'));
+    const total = rows.length;
+    const BATCH = 20;
+    let done = 0;
+
+    // Set all to loading
+    rows.forEach(row => {
+        row.querySelector('.check-status').innerHTML = '<span class="badge badge-gray">...</span>';
+        row.querySelector('.check-redirect').textContent = '';
+    });
+
+    for (let i = 0; i < total; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        const urls = batch.map(r => r.dataset.url);
+        btn.textContent = `Checking ${done}/${total}...`;
+
+        try {
+            const resp = await fetch('/api/check-urls', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({urls})
+            });
+            const results = await resp.json();
+            const resultMap = {};
+            results.forEach(r => resultMap[r.url] = r);
+
+            batch.forEach(row => {
+                const r = resultMap[row.dataset.url];
+                if (r) applyCheckResult(row, r);
+            });
+        } catch (e) {
+            batch.forEach(row => {
+                row.querySelector('.check-status').innerHTML = '<span class="status-code sc-0">ERR</span>';
+            });
+        }
+
+        done += batch.length;
+    }
+
+    btn.disabled = false;
+    btn.textContent = `Done (${total}) — Re-check`;
+}
+
+function exportDiffCSV(panelId, filename) {
+    const table = document.getElementById(panelId).querySelector('table');
+    if (!table) return;
+    const rows = [];
+    table.querySelectorAll('tr').forEach(tr => {
+        const cells = [];
+        tr.querySelectorAll('th, td').forEach(td => {
+            let text = td.innerText.trim().replace(/"/g, '""');
+            cells.push('"' + text + '"');
+        });
+        rows.push(cells.join(','));
+    });
+    const csv = '\uFEFF' + rows.join('\n');
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${filename}_{{ diff.scan_a }}_vs_{{ diff.scan_b }}.csv`;
+    a.click();
+}
+
+document.querySelectorAll('.diff-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.diff-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.diff-panel').forEach(p => p.style.display = 'none');
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).style.display = '';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Compider{% endblock %}</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; color: #333; }
+        nav { background: #1a1a2e; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 24px; }
+        nav a { color: #e0e0e0; text-decoration: none; font-size: 14px; }
+        nav a:hover { color: #fff; }
+        nav .brand { font-size: 20px; font-weight: 700; color: #4fc3f7; letter-spacing: 1px; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 16px; }
+        .card h2 { margin-bottom: 12px; font-size: 18px; color: #1a1a2e; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #555; }
+        tr:hover { background: #f5f8ff; }
+        .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; text-decoration: none; }
+        .btn-primary { background: #4fc3f7; color: #fff; }
+        .btn-primary:hover { background: #039be5; }
+        .btn-danger { background: #ef5350; color: #fff; }
+        .btn-danger:hover { background: #c62828; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        input[type="text"], input[type="url"] {
+            padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%;
+        }
+        input:focus { outline: none; border-color: #4fc3f7; }
+        .form-row { display: flex; gap: 8px; margin-bottom: 12px; }
+        .form-row input { flex: 1; }
+        .status-code { font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .sc-200 { background: #e8f5e9; color: #2e7d32; }
+        .sc-301, .sc-302, .sc-3xx { background: #fff3e0; color: #e65100; }
+        .sc-404, .sc-4xx { background: #ffebee; color: #c62828; }
+        .sc-5xx { background: #fce4ec; color: #880e4f; }
+        .sc-0 { background: #eceff1; color: #546e7a; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+        .badge-green { background: #c8e6c9; color: #2e7d32; }
+        .badge-red { background: #ffcdd2; color: #c62828; }
+        .badge-yellow { background: #fff9c4; color: #f57f17; }
+        .badge-blue { background: #bbdefb; color: #1565c0; }
+        .badge-gray { background: #eceff1; color: #546e7a; }
+        .scan-status { font-weight: 600; }
+        .scan-status.running { color: #1565c0; }
+        .scan-status.done { color: #2e7d32; }
+        .scan-status.error { color: #c62828; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+        .diff-section { margin-bottom: 20px; }
+        .diff-section h3 { margin-bottom: 8px; font-size: 15px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .summary-item { text-align: center; padding: 16px; border-radius: 8px; }
+        .summary-item .num { font-size: 28px; font-weight: 700; }
+        .summary-item .label { font-size: 12px; color: #666; margin-top: 4px; }
+        .url-cell { word-break: break-all; max-width: 400px; }
+        a { color: #1565c0; }
+        .filters { display: flex; gap: 8px; margin-bottom: 12px; }
+        .filters .btn { font-size: 12px; }
+        .filters .btn.active { background: #1a1a2e; color: #fff; }
+        .diff-tabs { display: flex; gap: 0; border-bottom: 2px solid #eee; }
+        .diff-tab { background: none; border: none; padding: 12px 20px; font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: border-color 0.2s; }
+        .diff-tab:hover { background: #f8f9fa; }
+        .diff-tab.active { border-bottom-color: currentColor !important; }
+        .diff-tab .badge { margin-left: 4px; vertical-align: middle; }
+        @media (max-width: 768px) {
+            .form-row { flex-direction: column; }
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="brand"><img src="/static/favicon.png" alt="" style="height:24px;width:24px;vertical-align:middle;margin-right:6px;border-radius:4px;">Compider</a>
+        {% if user is defined and user %}
+        <a href="/dashboard">Dashboard</a>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 13px; color: #aaa;">{{ user.name or user.email }}</span>
+            <a href="#" onclick="fetch('/api/auth/logout',{method:'POST'}).then(()=>location.href='/')" style="font-size: 13px;">Logout</a>
+        </div>
+        {% endif %}
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

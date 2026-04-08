@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}{{ site.name or site.url }} - Compider{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>{{ site.name or site.url }}</h2>
+    <p style="color: #666; margin-bottom: 12px;">{{ site.url }}</p>
+    <button class="btn btn-primary btn-sm" onclick="triggerScan({{ site.id }})">Scan Now</button>
+    {% if scans|length >= 2 %}
+    <a href="/site/{{ site.id }}/diff" class="btn btn-primary btn-sm" style="margin-left: 8px;">Compare Latest Scans</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Scan History</h2>
+    {% if scans %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th>Pages</th>
+                <th>Errors</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scan in scans %}
+            <tr>
+                <td>#{{ scan.id }}</td>
+                <td>{{ scan.started_at }}</td>
+                <td>{{ scan.finished_at or '-' }}</td>
+                <td>{{ scan.total_urls }}</td>
+                <td>
+                    {% if scan.error_count > 0 %}
+                    <a href="/site/{{ site.id }}/scan/{{ scan.id }}?filter=errors" class="badge badge-red" style="text-decoration:none;">{{ scan.error_count }}</a>
+                    {% else %}
+                    <span class="badge badge-green">0</span>
+                    {% endif %}
+                </td>
+                <td><span class="scan-status {{ scan.status }}">{{ scan.status }}</span></td>
+                <td>
+                    <a href="/site/{{ site.id }}/scan/{{ scan.id }}" class="btn btn-primary btn-sm">View</a>
+                    <button class="btn btn-danger btn-sm" onclick="deleteScan({{ scan.id }})">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No scans yet.</div>
+    {% endif %}
+</div>
+
+{% if pages is defined %}
+<div class="card">
+    <h2>Scan #{{ current_scan.id }} Results</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="filters" style="margin-bottom: 0;">
+            <a href="/site/{{ site.id }}/scan/{{ current_scan.id }}" class="btn btn-sm {% if not filter %}active{% endif %}">All ({{ total_count }})</a>
+            <a href="/site/{{ site.id }}/scan/{{ current_scan.id }}?filter=errors" class="btn btn-sm {% if filter == 'errors' %}active{% endif %}">Errors ({{ error_count }})</a>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="exportScanCSV()">Export CSV</button>
+    </div>
+    {% if pages %}
+    <table>
+        <thead>
+            <tr>
+                <th>Status</th>
+                <th>URL</th>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Referred By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for page in pages %}
+            <tr>
+                <td>
+                    {% set sc = page.status_code %}
+                    {% if sc == 200 %}
+                    <span class="status-code sc-200">{{ sc }}</span>
+                    {% elif sc >= 300 and sc < 400 %}
+                    <span class="status-code sc-3xx">{{ sc }}</span>
+                    {% elif sc >= 400 and sc < 500 %}
+                    <span class="status-code sc-4xx">{{ sc }}</span>
+                    {% elif sc >= 500 %}
+                    <span class="status-code sc-5xx">{{ sc }}</span>
+                    {% else %}
+                    <span class="status-code sc-0">{{ sc }}</span>
+                    {% endif %}
+                </td>
+                <td class="url-cell"><a href="{{ page.url }}" target="_blank">{{ page.url }}</a></td>
+                <td>{{ page.title or '-' }}</td>
+                <td>{{ (page.description or '-')[:80] }}</td>
+                <td class="url-cell">
+                    {% if page.referred_by %}
+                    <a href="{{ page.referred_by }}" target="_blank">{{ page.referred_by }}</a>
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No pages found.</div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function triggerScan(siteId) {
+    const resp = await fetch(`/api/sites/${siteId}/scan`, {method: 'POST'});
+    if (resp.ok) location.reload();
+}
+
+async function deleteScan(scanId) {
+    if (!confirm('Delete this scan and all its page data?')) return;
+    const resp = await fetch(`/api/scans/${scanId}`, {method: 'DELETE'});
+    if (resp.ok) location.reload();
+}
+
+function exportScanCSV() {
+    const table = document.querySelector('.card:last-of-type table');
+    if (!table) return;
+    const rows = [];
+    table.querySelectorAll('tr').forEach(tr => {
+        const cells = [];
+        tr.querySelectorAll('th, td').forEach(td => {
+            let text = td.innerText.trim().replace(/"/g, '""');
+            cells.push('"' + text + '"');
+        });
+        rows.push(cells.join(','));
+    });
+    const csv = '\uFEFF' + rows.join('\n');
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const filter = new URLSearchParams(location.search).get('filter');
+    a.download = `scan_{% if current_scan is defined %}{{ current_scan.id }}{% endif %}_${filter || 'all'}.csv`;
+    a.click();
+}
+</script>
+{% endblock %}
