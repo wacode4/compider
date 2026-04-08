@@ -7,16 +7,21 @@ from app.database import get_db
 from app.crawler import crawl_site
 from app.scheduler import scheduler, scheduled_crawl
 from app.auth import hash_password, verify_password, create_token, require_user
+import os
 
 router = APIRouter(prefix="/api")
 
 
 # --- Auth ---
 
+INVITE_CODE = os.environ.get("COMPIDER_INVITE_CODE", "")
+
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
     name: str | None = None
+    invite_code: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -26,6 +31,8 @@ class LoginRequest(BaseModel):
 
 @router.post("/auth/register")
 async def register(req: RegisterRequest):
+    if INVITE_CODE and req.invite_code != INVITE_CODE:
+        raise HTTPException(status_code=403, detail="Invalid invite code")
     db = await get_db()
     try:
         existing = await db.execute("SELECT id FROM users WHERE email = ?", (req.email,))

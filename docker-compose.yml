@@ -10,3 +10,4 @@ services:
     environment:
       - COMPIDER_DB=/app/data/compider.db
       - COMPIDER_SECRET=${COMPIDER_SECRET:-change-this-secret-in-production}
+      - COMPIDER_INVITE_CODE=${COMPIDER_INVITE_CODE:-}
