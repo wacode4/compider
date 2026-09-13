@@ -34,20 +34,33 @@ async def crawl_one_site(site_id: int):
         await db.close()
 
 
+# Scheduled scans run in the early morning (CST = UTC+8) and are staggered by site id so
+# that two sites on the same server never crawl at the same time. Before 2026-09-13 the
+# trigger copied the wall-clock time of the moment the job was (re)created, so every
+# container restart moved the run to a random daytime slot and all sites fired at once.
+SCAN_BASE_HOUR_UTC = 19  # 03:00 CST
+
+
+def scan_time_for_site(site_id: int):
+    """Return (hour_utc, minute) for a site: 19:00, 20:00, 21:00 ... UTC by site id."""
+    hour = (SCAN_BASE_HOUR_UTC + (site_id - 1)) % 24
+    return hour, 0
+
+
 def schedule_site_job(site_id: int, url: str, schedule: str):
     """Add or replace a scheduled job for a site.
 
     schedule: "weekly" or "monthly"
-    First run is ~1 week or ~1 month from now at the current time.
+    weekly  -> every Sunday at the site's fixed early-morning slot
+    monthly -> the 1st of each month at that slot
     """
     job_id = f"site_crawl_{site_id}"
-    now = datetime.now()
+    hour, minute = scan_time_for_site(site_id)
 
     if schedule == "weekly":
-        trigger = CronTrigger(day_of_week=now.strftime("%a").lower()[:3], hour=now.hour, minute=now.minute)
+        trigger = CronTrigger(day_of_week="sun", hour=hour, minute=minute)
     elif schedule == "monthly":
-        day = min(now.day, 28)  # avoid issues with short months
-        trigger = CronTrigger(day=day, hour=now.hour, minute=now.minute)
+        trigger = CronTrigger(day=1, hour=hour, minute=minute)
     else:
         return
 

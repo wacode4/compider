@@ -40,7 +40,9 @@ def extract_metadata(html: str) -> dict:
     return {"title": title, "description": description}
 
 
-async def crawl_site(site_url: str, scan_id: int, db, max_concurrent: int = 10):
+# 2026-09-13: 10 -> 2. bnda (burdental + cadburs) is a 2-core box and a cadburs page
+# costs ~1 s of PHP; 10 concurrent fetches saturated its php-fpm pool for ~30 min every week.
+async def crawl_site(site_url: str, scan_id: int, db, max_concurrent: int = 2):
     """Crawl a site, storing results in the database."""
     site_url = normalize_url(site_url)
     visited = set()
